@@ -2,3 +2,7 @@ name = "CUDAPreconditioners"
 uuid = "57b3401a-ff44-4c54-9e38-1c8db7da4902"
 authors = ["Felix Koehler <f.koehler@tum.de>"]
 version = "0.1.0"
+
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
