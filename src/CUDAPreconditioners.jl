@@ -6,10 +6,14 @@ iterative solvers.
 Based on the tutorial from Krlov.jl
 https://juliasmoothoptimizers.github.io/Krylov.jl/stable/gpu/#Example-with-a-symmetric-positive-definite-system
 """
+module CUDAPreconditioners
 
 using CUDA
 using CUDA.CUSPARSE
-using LinearAlgebra
+
+import LinearAlgebra.ldiv!
+
+export ilu0, ldiv!
 
 
 struct CuILU0CSC{
@@ -21,7 +25,7 @@ struct CuILU0CSC{
     CuILU0CSC(A::CuSparseMatrixCSC{Tv, Ti}) where {Tv<:Number, Ti<:Integer} = new{Tv, Ti}(ilu02(A, 'O'))
 end
 
-function LinearAlgebra.ldiv!(y, P::CuILU0CSC, x)
+function ldiv!(y, P::CuILU0CSC, x)
     copyto!(y, x)
     sv2!('N', 'L', 'N', 1.0, P.factorization, y, 'O')
     sv2!('N', 'U', 'U', 1.0, P.factorization, y, 'O')
@@ -37,7 +41,7 @@ struct CuILU0CSR{
     CuILU0CSR(A::CuSparseMatrixCSR{Tv, Ti}) where {Tv<:Number, Ti<:Integer} = new{Tv, Ti}(ilu02(A, 'O'))
 end
 
-function LinearAlgebra.ldiv!(y, P::CuILU0CSR, x)
+function ldiv!(y, P::CuILU0CSR, x)
     copyto!(y, x)
     sv2!('N', 'L', 'U', 1.0, P.factorization, y, 'O')
     sv2!('N', 'U', 'N', 1.0, P.factorization, y, 'O')
@@ -57,3 +61,5 @@ end
 function ilu0(A::CuSparseMatrixCSR{Tv, Ti}) where {Tv<:Number, Ti<:Integer}
     return CuILU0CSR(A)
 end
+
+end # module CUDAPreconditioners
