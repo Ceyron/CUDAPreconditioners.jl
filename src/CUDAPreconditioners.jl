@@ -43,3 +43,17 @@ function LinearAlgebra.ldiv!(y, P::CuILU0CSR, x)
     sv2!('N', 'U', 'N', 1.0, P.factorization, y, 'O')
     return y
 end
+
+"""
+    ilu0(A:<{CuSparseMatrixCSC, CuSparseMatrixCSR})
+
+Compute the incomplete LU factorization of `A` using the CUSPARSE library,
+returning a struct for which `ldiv!` can be used as a preconditioner.
+"""
+function ilu0(A::CuSparseMatrixCSC{Tv, Ti}) where {Tv<:Number, Ti<:Integer}
+    return CuILU0CSC(A)
+end
+
+function ilu0(A::CuSparseMatrixCSR{Tv, Ti}) where {Tv<:Number, Ti<:Integer}
+    return CuILU0CSR(A)
+end
