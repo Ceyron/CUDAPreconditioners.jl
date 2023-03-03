@@ -105,3 +105,101 @@ u_gpu_next_with_preconditioner, solve_stats_with_preconditioner = cg(
 
 The preconditioned version takes way fewer iterations to converge.
 
+### Solving the 1d Advection Equation
+
+The 1D Advection Equation
+
+$$
+\frac{\partial u}{\partial t} + c \frac{\partial u}{\partial x} = 0
+$$
+
+with periodic boundary conditions
+
+$$
+u(0,t) = u(1,t)
+$$
+
+and a backward-in-time first-order upwind discretization (implicit Euler)
+requires the solution to a linear system of equations in each iteration.
+
+$$
+A u^{[t+1]} = u^{[t]}
+$$
+
+If we fix $c>0$, we need backward-in-space approximation of the first derivative
+in order to stable. The system matrix, therefore, consists of a main diagonal
+and a lower diagonal band. It has the structure
+
+$$
+A = \begin{pmatrix}
+1 + c \frac{\Delta t}{\Delta x} & 0 & 0 & \dots & -c \frac{\Delta t}{\Delta x} \\
+-c \frac{\Delta t}{\Delta x} & 1 + c \frac{\Delta t}{\Delta x} & 0 & \dots & 0 \\
+0 & -c \frac{\Delta t}{\Delta x} & 1 + c \frac{\Delta t}{\Delta x} & \dots & 0 \\
+\vdots & \vdots & \vdots & \ddots & \vdots \\
+0 & 0 & 0 & \dots & 1 + c \frac{\Delta t}{\Delta x}
+\end{pmatrix}
+$$
+
+The system matrix is singular, i.e. $\det(A)=0$, due to the periodic boundary conditions. Typically, this would require special care, but here our linear solver will converge anyway.
+
+Again, let's first assemble the matrix $A$ on the CPU and set up an initial condition.
+
+```julia
+using SparseArrays
+using LinearAlgebra
+
+N = 10_000  # Interior DoF without the right periodic boundary point
+Δx = 1 / N
+Δt = 0.1
+c = 1.0
+
+A = spdiagm(-1 => -c * Δt / Δx * ones(N-1),
+             0 => 1 .+ c * Δt / Δx * ones(N),
+             1 => -c * Δt / Δx * ones(N-1))
+
+A[end, 1] = -c * Δt / Δx
+
+mesh = range(0.0, 1.0, length=N+1)
+u = ifelse.((mesh .> 0.2) .& (mesh .< 0.4), 1.0, 0.0)[1:end-1]
+```
+
+Let's move the matrix $A$ to the GPU and create a preconditioner for it. We need an `ilu0` preconditioner here, because the matrix is not symmetric.
+
+```julia
+using CUDA
+using CUDA.CUSPARSE
+using CUDAPreconditioners
+
+A_gpu = CuSparseMatrixCSR(A)
+P_r_gpu = ilu0(A_gpu)
+```
+
+Then, we can solve the linear system on the GPU using the `bicgstab`
+(BiConjugate Gradient Stabilized) solver from
+[Krylov.jl](https://github.com/JuliaSmoothOptimizers/Krylov.jl).
+
+```julia
+using Krylov
+
+u_gpu = CuArray(u)
+
+# Solve without a preconditioner
+u_gpu_next_no_preconditioner, solve_stats_no_preconditioner = bicgstab(
+    A_gpu,
+    u_gpu,
+    itmax=100_000,
+)
+
+# Solve with the preconditioner
+u_gpu_next_with_preconditioner, solve_stats_with_preconditioner = bicgstab(
+    A_gpu,
+    u_gpu,
+    N=P_r_gpu,
+    ldiv=true,
+    itmax=100_000,
+)
+
+@show solve_stats_no_preconditioner.niter  # -> 58020
+@show solve_stats_with_preconditioner.niter  # -> 1
+```
+
