@@ -13,7 +13,7 @@ using CUDA.CUSPARSE
 
 import LinearAlgebra.ldiv!
 
-export ilu0, ldiv!
+export ilu0, ic0, ldiv!
 
 # ILU decomposition for CuSparseMatrixCSC (CSC) matrix
 struct CuILU0CSC{
